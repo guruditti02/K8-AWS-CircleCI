@@ -7,14 +7,38 @@ jobs:
     steps:
       - checkout
 
+      # Step 1: Set up AWS Credentials
       - run:
-          name: Set Up Kubernetes
+          name: Set Up AWS Credentials
+          command: |
+            echo "Setting up AWS credentials"
+            aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
+            aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
+            aws configure set default.region $AWS_DEFAULT_REGION
+
+      # Step 2: Verify AWS Credentials
+      - run:
+          name: Verify AWS Credentials
+          command: |
+            echo "Verifying AWS credentials..."
+            aws sts get-caller-identity --query "Arn" --output text
+            aws ec2 describe-regions --query "Regions[*].RegionName" --output text
+
+      # Step 3: Set Up Kubernetes Context for EKS
+      - run:
+          name: Set Up Kubernetes Context for EKS
           command: |
             echo $KUBECONFIG_DATA | base64 -d > kubeconfig
             export KUBECONFIG=kubeconfig
-            kubectl config use-context arn:aws:eks:ap-southeast-2:339713019591:cluster/test-1
+            # Use the correct context name for EKS cluster
+            kubectl config use-context $EKS_CLUSTER_NAME
             kubectl config current-context
             kubectl config view
+
+      # Step 4: Deploy to Kubernetes (EKS)
+      - run:
+          name: Deploy to Kubernetes (EKS)
+          command: |
             kubectl apply -f mongo-secrets.yaml
             kubectl apply -f mongo.yaml
             kubectl apply -f mongo-configMap.yaml
@@ -26,9 +50,3 @@ workflows:
   deploy:
     jobs:
       - deploy_to_kubernetes
-
-
-      # Was Used for creating the ecr secret.  
-      #PASSWORD=$(aws ecr get-login-password --region $AWS_DEFAULT_REGION)
-      #echo "Creating Docker registry secret..."
-      #kubectl create secret docker-registry ecr-secret --docker-server=339713019591.dkr.ecr.ap-southeast-2.amazonaws.com --docker-username=AWS --docker-password="${PASSWORD}" 
